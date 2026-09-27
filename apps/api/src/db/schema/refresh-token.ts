@@ -1,4 +1,5 @@
 import { pgTable, uuid, varchar, timestamp, index } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { usersTable } from "./user";
 
 export const refreshTokensTable = pgTable(
@@ -12,7 +13,8 @@ export const refreshTokensTable = pgTable(
       })
       .notNull(),
 
-    tokenHash: varchar({ length: 64 }).notNull(),
+    // sha256 hex of the refresh token. Unique: one row per issued token.
+    tokenHash: varchar({ length: 64 }).notNull().unique(),
 
     createdAt: timestamp({ mode: "date" }).defaultNow().notNull(),
 
@@ -21,11 +23,18 @@ export const refreshTokensTable = pgTable(
       .$onUpdate(() => new Date())
       .notNull(),
 
+    // Sliding expiry: refreshed on rotation.
     expiresAt: timestamp({ mode: "date" }).notNull(),
+
+    // Hard cap for the whole session lineage. Rotation extends expiresAt but
+    // never this — a session dies at absoluteExpiresAt no matter how active.
+    absoluteExpiresAt: timestamp({ mode: "date" })
+      .default(sql`now() + interval '90 days'`)
+      .notNull(),
 
     revokedAt: timestamp({ mode: "date" }),
   },
   (table) => ({
-    tokenHashIdx: index("refresh_token_hash_idx").on(table.tokenHash),
+    userIdIdx: index("refresh_tokens_user_id_idx").on(table.userId),
   }),
 );

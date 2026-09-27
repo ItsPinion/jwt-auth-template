@@ -12,33 +12,36 @@ const ALLOWED_EXPIRES = [
   "30d",
 ] as const;
 
-export function getJwtExpiresIn(
-  value: string | undefined,
-): SignOptions["expiresIn"] {
-  if (value && ALLOWED_EXPIRES.includes(value as any)) {
-    return value as SignOptions["expiresIn"];
+type ExpiresValue = (typeof ALLOWED_EXPIRES)[number];
+
+/**
+ * Single source of truth for expiry configuration. The JWT `expiresIn`, the
+ * refresh-cookie `maxAge`, and the DB `expiresAt` must all go through this —
+ * if they ever disagree, cookies outlive tokens (or vice versa) and users see
+ * confusing 401s or keep stale cookies around.
+ */
+function parseExpiry(value: string | undefined, name: string): ExpiresValue {
+  if (value && ALLOWED_EXPIRES.includes(value as ExpiresValue)) {
+    return value as ExpiresValue;
   }
 
   console.warn(
-    `[auth] Invalid JWT_EXPIRES_IN="${value}". Falling back to "15m". Allowed: ${ALLOWED_EXPIRES.join(", ")}`,
+    `[auth] Invalid ${name}="${value}". Falling back to "15m". Allowed: ${ALLOWED_EXPIRES.join(", ")}`,
   );
 
   return "15m";
 }
 
-export function getJwtExpiresInMs(value: string | undefined): number {
+export function getJwtExpiresIn(
+  value: string | undefined,
+  name = "JWT_EXPIRES_IN",
+): SignOptions["expiresIn"] {
+  return parseExpiry(value, name);
+}
 
-  
-
-  const duration = ms((value ?? "15m") as StringValue);
-
-  if (typeof duration === "number") {
-    return duration;
-  }
-
-  console.warn(
-    `[auth] Invalid JWT_EXPIRES_IN="${value}". Falling back to 15 minutes.`,
-  );
-
-  return ms("15m") as number;
+export function getJwtExpiresInMs(
+  value: string | undefined,
+  name = "JWT_EXPIRES_IN",
+): number {
+  return ms(parseExpiry(value, name) as StringValue);
 }

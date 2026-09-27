@@ -1,4 +1,6 @@
 import type { Request, Response } from "express";
+
+type RouteParams = Record<string, string | string[]>;
 import { eq } from "drizzle-orm";
 import bcrypt from "bcrypt";
 import {
@@ -8,22 +10,35 @@ import {
 } from "../lib/jwt";
 import { db, usersTable, refreshTokensTable } from "../db";
 import { hashToken } from "../lib/hash";
-import { getJwtExpiresInMs } from "../../env";
+import {
+  claimRefreshToken,
+  purgeStaleTokens,
+  revokeAllUserTokens,
+} from "../lib/refresh-tokens";
 import type { LoginInput, RegisterInput } from "@repo/shared";
+import { normalizeEmail } from "@repo/shared";
 import { asyncHandler } from "../middleware/async-handler";
-import { AppError } from "../lib/error";
+import { AppError, isUniqueViolation } from "../lib/error";
 import { StatusCodes } from "http-status-codes";
 import {
+  getAbsoluteSessionExpiresAt,
   getRefreshTokenExpiresAt,
+  getRotatedExpiresAt,
   REFRESH_COOKIE_NAME,
   refreshCookieOptions,
 } from "../config/cookies";
-import { SALT_ROUNDS } from "../config/auth";
+import { SALT_ROUNDS, compareAgainstDummy } from "../config/auth";
 import { created, success } from "../lib/response";
 
 export const register = asyncHandler(
-  async (req: Request<{}, {}, RegisterInput>, res: Response) => {
-    const { email, password, role } = req.body;
+  async (
+    req: Request<RouteParams, unknown, RegisterInput>,
+    res: Response,
+  ) => {
+    // Schema already normalizes; normalize again so this handler is safe
+    // regardless of the middleware chain it runs behind.
+    const email = normalizeEmail(req.body.email);
+    const { password } = req.body;
 
     const [existingUser] = await db
       .select()
@@ -37,14 +52,26 @@ export const register = asyncHandler(
 
     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 
-    const [user] = await db
-      .insert(usersTable)
-      .values({
-        email: email.trim().toLowerCase(),
-        password: hashedPassword,
-        role,
-      })
-      .returning();
+    let user;
+    try {
+      [user] = await db
+        .insert(usersTable)
+        .values({
+          email,
+          password: hashedPassword,
+          // Never taken from the request: registration always creates a
+          // student. Privileged roles are granted by an admin later.
+          role: "student",
+        })
+        .returning();
+    } catch (err) {
+      // Concurrent registration can slip past the check above; the UNIQUE
+      // index is the source of truth.
+      if (isUniqueViolation(err)) {
+        throw new AppError("Email already in use.", StatusCodes.CONFLICT);
+      }
+      throw err;
+    }
 
     if (!user) {
       throw new AppError(
@@ -65,6 +92,7 @@ export const register = asyncHandler(
       userId: user.id,
       tokenHash: hashToken(refreshToken),
       expiresAt: getRefreshTokenExpiresAt(),
+      absoluteExpiresAt: getAbsoluteSessionExpiresAt(),
       revokedAt: null,
     });
 
@@ -75,16 +103,24 @@ export const register = asyncHandler(
 );
 
 export const login = asyncHandler(
-  async (req: Request<{}, {}, LoginInput>, res: Response) => {
-    const { email, password } = req.body;
+  async (
+    req: Request<RouteParams, unknown, LoginInput>,
+    res: Response,
+  ) => {
+    const email = normalizeEmail(req.body.email);
+    const { password } = req.body;
 
     const [user] = await db
       .select()
       .from(usersTable)
-      .where(eq(usersTable.email, email.trim().toLowerCase()))
+      .where(eq(usersTable.email, email))
       .limit(1);
 
     if (!user) {
+      // Spend the same bcrypt time as the real path so response timing does
+      // not reveal whether an email is registered.
+      await compareAgainstDummy(password);
+
       throw new AppError(
         "Invalid email or password.",
         StatusCodes.UNAUTHORIZED,
@@ -112,6 +148,7 @@ export const login = asyncHandler(
       userId: user.id,
       tokenHash: hashToken(refreshToken),
       expiresAt: getRefreshTokenExpiresAt(),
+      absoluteExpiresAt: getAbsoluteSessionExpiresAt(),
       revokedAt: null,
     });
 
@@ -122,11 +159,29 @@ export const login = asyncHandler(
 );
 
 export const me = asyncHandler(async (req: Request, res: Response) => {
-  success(res, StatusCodes.OK, "User fetched successfully", { user: req.user });
+  if (!req.user) {
+    throw new AppError("Unauthorized", StatusCodes.UNAUTHORIZED);
+  }
+
+  // Read from the DB rather than echoing the access-token claims, so profile
+  // changes (e.g. a role update) are visible before the token expires.
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, req.user.id))
+    .limit(1);
+
+  if (!user) {
+    throw new AppError("Unauthorized", StatusCodes.UNAUTHORIZED);
+  }
+
+  success(res, StatusCodes.OK, "User fetched successfully", {
+    user: { id: user.id, email: user.email, role: user.role },
+  });
 });
 
 export const logout = asyncHandler(async (req: Request, res: Response) => {
-  let { refreshToken } = req.cookies;
+  const { refreshToken } = req.cookies;
 
   if (!refreshToken) {
     throw new AppError("already logged out.", StatusCodes.UNAUTHORIZED);
@@ -166,11 +221,18 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
     .where(eq(refreshTokensTable.tokenHash, hashToken(refreshToken)))
     .limit(1);
 
-  if (!storedToken) {
+  if (!storedToken || storedToken.userId !== userId) {
+    res.clearCookie(REFRESH_COOKIE_NAME, refreshCookieOptions);
+
     throw new AppError("Unauthorized", StatusCodes.UNAUTHORIZED);
   }
 
   if (storedToken.revokedAt) {
+    // Reuse of a rotated-out token: it was likely stolen. End every session
+    // for this user so the thief's rotation (if any) is revoked too.
+    await revokeAllUserTokens(storedToken.userId);
+    res.clearCookie(REFRESH_COOKIE_NAME, refreshCookieOptions);
+
     throw new AppError("Unauthorized", StatusCodes.UNAUTHORIZED);
   }
 
@@ -178,6 +240,17 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
     await db
       .delete(refreshTokensTable)
       .where(eq(refreshTokensTable.id, storedToken.id));
+    res.clearCookie(REFRESH_COOKIE_NAME, refreshCookieOptions);
+
+    throw new AppError("Unauthorized", StatusCodes.UNAUTHORIZED);
+  }
+
+  if (new Date() > storedToken.absoluteExpiresAt) {
+    // The session lineage hit its hard cap — rotation cannot extend it.
+    await db
+      .delete(refreshTokensTable)
+      .where(eq(refreshTokensTable.id, storedToken.id));
+    res.clearCookie(REFRESH_COOKIE_NAME, refreshCookieOptions);
 
     throw new AppError("Unauthorized", StatusCodes.UNAUTHORIZED);
   }
@@ -189,6 +262,19 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
     .limit(1);
 
   if (!user) {
+    res.clearCookie(REFRESH_COOKIE_NAME, refreshCookieOptions);
+
+    throw new AppError("Unauthorized", StatusCodes.UNAUTHORIZED);
+  }
+
+  // Claim the token for rotation atomically. If another request got here
+  // first (concurrent refresh), the claim fails and we refuse instead of
+  // minting a second session from one token.
+  const claimed = await claimRefreshToken(storedToken.id);
+
+  if (!claimed) {
+    res.clearCookie(REFRESH_COOKIE_NAME, refreshCookieOptions);
+
     throw new AppError("Unauthorized", StatusCodes.UNAUTHORIZED);
   }
 
@@ -198,23 +284,32 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
     role: user.role,
   });
 
-  await db
-    .update(refreshTokensTable)
-    .set({
-      revokedAt: new Date(),
-    })
-    .where(eq(refreshTokensTable.id, storedToken.id));
-
   refreshToken = generateRefreshToken(user.id);
+
+  // Piggyback maintenance: drop rows that can never be replayed again.
+  await purgeStaleTokens(storedToken.userId);
 
   await db.insert(refreshTokensTable).values({
     userId: user.id,
     tokenHash: hashToken(refreshToken),
-    expiresAt: getRefreshTokenExpiresAt(),
+    // Rotation extends the sliding expiry but never past the hard cap.
+    expiresAt: getRotatedExpiresAt(storedToken.absoluteExpiresAt),
+    absoluteExpiresAt: storedToken.absoluteExpiresAt,
     revokedAt: null,
   });
 
   res.cookie(REFRESH_COOKIE_NAME, refreshToken, refreshCookieOptions);
 
   success(res, StatusCodes.OK, "Refresh successful", { accessToken });
+});
+
+export const logoutAll = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    throw new AppError("Unauthorized", StatusCodes.UNAUTHORIZED);
+  }
+
+  await revokeAllUserTokens(req.user.id);
+  res.clearCookie(REFRESH_COOKIE_NAME, refreshCookieOptions);
+
+  success(res, StatusCodes.OK, "Signed out of all sessions");
 });

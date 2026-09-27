@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
+import { LogoutAllButton } from "@/components/dashboard/logout-all-button";
 import { LogoutButton } from "@/components/dashboard/logout-button";
 import { ProfileCard } from "@/components/dashboard/profile-card";
 import { ProfileCardSkeleton } from "@/components/dashboard/profile-card-skeleton";
@@ -22,7 +23,10 @@ export default function DashboardPage() {
     <div className="relative flex min-h-dvh flex-col">
       <div aria-hidden="true" className="absolute inset-0 -z-10 bg-radial-fade" />
       <DashboardHeader>
-        <LogoutButton />
+        <div className="flex items-center gap-1">
+          <LogoutAllButton />
+          <LogoutButton />
+        </div>
       </DashboardHeader>
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-10">
         <div className="space-y-1">

@@ -35,6 +35,17 @@ export async function logout(): Promise<void> {
   }
 }
 
+/** Signs out of every session for this user, on every device. */
+export async function logoutAll(): Promise<void> {
+  try {
+    await api.post("/auth/logout-all");
+  } catch {
+    // The local session is cleared regardless.
+  } finally {
+    clearAccessToken();
+  }
+}
+
 export async function fetchCurrentUser(): Promise<User> {
   const { data } = await api.get<ApiResponse<CurrentUserPayload>>("/auth/me");
 

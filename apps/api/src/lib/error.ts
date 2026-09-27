@@ -17,3 +17,18 @@ export class AppError extends Error {
     Error.captureStackTrace(this, this.constructor);
   }
 }
+
+/** Postgres SQLSTATE for unique_violation. */
+const UNIQUE_VIOLATION = "23505";
+
+/**
+ * Detects a database unique-constraint violation (e.g. two concurrent
+ * registrations racing past the application-level duplicate check).
+ */
+export function isUniqueViolation(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) {
+    return false;
+  }
+  const code = (err as { code?: unknown }).code;
+  return code === UNIQUE_VIOLATION;
+}

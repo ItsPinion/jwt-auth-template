@@ -6,8 +6,12 @@ export const validate =
     const result = schema.safeParse(req.body);
 
     if (!result.success) {
+      // Keep the standard { success, message, data } envelope so clients can
+      // handle every error the same way.
       return res.status(400).json({
-        errors: result.error.flatten().fieldErrors,
+        success: false,
+        message: "Validation failed.",
+        data: { errors: result.error.flatten().fieldErrors },
       });
     }
 

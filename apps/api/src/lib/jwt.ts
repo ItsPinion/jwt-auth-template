@@ -9,7 +9,10 @@ export type JwtPayload = {
 };
 export function generateAccessToken(payload: JwtPayload) {
   return jwt.sign(payload, process.env.ACCESS_TOKEN_SECRET!, {
-    expiresIn: getJwtExpiresIn(process.env.ACCESS_TOKEN_EXPIRES_IN),
+    expiresIn: getJwtExpiresIn(
+      process.env.ACCESS_TOKEN_EXPIRES_IN,
+      "ACCESS_TOKEN_EXPIRES_IN",
+    ),
   });
 }
 
@@ -19,7 +22,7 @@ export function verifyAccessToken(token: string) {
 
 export function generateRefreshToken(userId: string) {
   return jwt.sign({ userId }, process.env.REFRESH_SECRET!, {
-    expiresIn: getJwtExpiresIn(process.env.REFRESH_EXPIRES_IN),
+    expiresIn: getJwtExpiresIn(process.env.REFRESH_EXPIRES_IN, "REFRESH_EXPIRES_IN"),
   });
 }
 
