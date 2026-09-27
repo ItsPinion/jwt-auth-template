@@ -23,7 +23,7 @@ import {
   REFRESH_COOKIE_NAME,
   refreshCookieOptions,
 } from "../config/cookies";
-import { SALT_ROUNDS } from "../config/auth";
+import { SALT_ROUNDS, compareAgainstDummy } from "../config/auth";
 import { created, success } from "../lib/response";
 
 export const register = asyncHandler(
@@ -106,6 +106,10 @@ export const login = asyncHandler(
       .limit(1);
 
     if (!user) {
+      // Spend the same bcrypt time as the real path so response timing does
+      // not reveal whether an email is registered.
+      await compareAgainstDummy(password);
+
       throw new AppError(
         "Invalid email or password.",
         StatusCodes.UNAUTHORIZED,
