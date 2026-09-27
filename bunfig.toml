@@ -1,0 +1,5 @@
+[install]
+# npm-style flat node_modules without symlinks. Vercel's function bundler copies
+# traced files but not bun's isolated-mode symlinks, which left functions unable
+# to resolve packages like bcrypt at cold start (500 FUNCTION_INVOCATION_FAILED).
+linker = "hoisted"

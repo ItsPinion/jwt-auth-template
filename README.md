@@ -79,6 +79,19 @@ The API deploys as a single Vercel Function (Node runtime). The function entry i
   every other path is routed to the function while a `request.path` transform
   preserves the original URL, so both `/health` and `/api/health` reach the app.
 
+Two install-time settings keep the function bundle resolvable at runtime
+(without them every request fails with `500 FUNCTION_INVOCATION_FAILED` at cold
+start, because Vercel's function bundler copies traced files but not bun's
+node_modules symlinks):
+
+- `bunfig.toml` sets `linker = "hoisted"` — a flat npm-style `node_modules`
+  without symlinks, so packages like `bcrypt` are real folders the bundler can
+  copy.
+- `scripts/link-workspace-packages.mjs` (runs via `postinstall`) materializes
+  workspace packages such as `@repo/shared` into `apps/api/node_modules/@repo/`
+  — as a copy with a pre-built JS entry on Vercel, and as a live symlink
+  locally so source edits stay live.
+
 The API tsconfig whitelists `["node", "bun"]` types plus `@types/node` so Vercel's
 function compile step sees Node globals (`process`, `Buffer`, …).
 
