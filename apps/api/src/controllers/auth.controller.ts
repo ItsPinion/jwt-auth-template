@@ -12,6 +12,7 @@ import { db, usersTable, refreshTokensTable } from "../db";
 import { hashToken } from "../lib/hash";
 import {
   claimRefreshToken,
+  purgeStaleTokens,
   revokeAllUserTokens,
 } from "../lib/refresh-tokens";
 import type { LoginInput, RegisterInput } from "@repo/shared";
@@ -20,7 +21,9 @@ import { asyncHandler } from "../middleware/async-handler";
 import { AppError, isUniqueViolation } from "../lib/error";
 import { StatusCodes } from "http-status-codes";
 import {
+  getAbsoluteSessionExpiresAt,
   getRefreshTokenExpiresAt,
+  getRotatedExpiresAt,
   REFRESH_COOKIE_NAME,
   refreshCookieOptions,
 } from "../config/cookies";
@@ -89,6 +92,7 @@ export const register = asyncHandler(
       userId: user.id,
       tokenHash: hashToken(refreshToken),
       expiresAt: getRefreshTokenExpiresAt(),
+      absoluteExpiresAt: getAbsoluteSessionExpiresAt(),
       revokedAt: null,
     });
 
@@ -144,6 +148,7 @@ export const login = asyncHandler(
       userId: user.id,
       tokenHash: hashToken(refreshToken),
       expiresAt: getRefreshTokenExpiresAt(),
+      absoluteExpiresAt: getAbsoluteSessionExpiresAt(),
       revokedAt: null,
     });
 
@@ -222,6 +227,16 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
     throw new AppError("Unauthorized", StatusCodes.UNAUTHORIZED);
   }
 
+  if (new Date() > storedToken.absoluteExpiresAt) {
+    // The session lineage hit its hard cap — rotation cannot extend it.
+    await db
+      .delete(refreshTokensTable)
+      .where(eq(refreshTokensTable.id, storedToken.id));
+    res.clearCookie(REFRESH_COOKIE_NAME, refreshCookieOptions);
+
+    throw new AppError("Unauthorized", StatusCodes.UNAUTHORIZED);
+  }
+
   const [user] = await db
     .select()
     .from(usersTable)
@@ -253,14 +268,30 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
 
   refreshToken = generateRefreshToken(user.id);
 
+  // Piggyback maintenance: drop rows that can never be replayed again.
+  await purgeStaleTokens(storedToken.userId);
+
   await db.insert(refreshTokensTable).values({
     userId: user.id,
     tokenHash: hashToken(refreshToken),
-    expiresAt: getRefreshTokenExpiresAt(),
+    // Rotation extends the sliding expiry but never past the hard cap.
+    expiresAt: getRotatedExpiresAt(storedToken.absoluteExpiresAt),
+    absoluteExpiresAt: storedToken.absoluteExpiresAt,
     revokedAt: null,
   });
 
   res.cookie(REFRESH_COOKIE_NAME, refreshToken, refreshCookieOptions);
 
   success(res, StatusCodes.OK, "Refresh successful", { accessToken });
+});
+
+export const logoutAll = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    throw new AppError("Unauthorized", StatusCodes.UNAUTHORIZED);
+  }
+
+  await revokeAllUserTokens(req.user.id);
+  res.clearCookie(REFRESH_COOKIE_NAME, refreshCookieOptions);
+
+  success(res, StatusCodes.OK, "Signed out of all sessions");
 });

@@ -4,6 +4,7 @@ import {
   login,
   me,
   logout,
+  logoutAll,
   refresh,
 } from "../controllers/auth.controller.ts";
 import { auth } from "../middleware/auth.ts";
@@ -23,6 +24,8 @@ authRoutes.post(
 authRoutes.post("/login", credentialLimiter, validate(loginSchema), login);
 
 authRoutes.post("/logout", sessionLimiter, logout);
+
+authRoutes.post("/logout-all", sessionLimiter, auth, logoutAll);
 
 authRoutes.post("/refresh", sessionLimiter, refresh);
 

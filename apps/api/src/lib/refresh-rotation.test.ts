@@ -1,8 +1,8 @@
 /**
- * Behavioral tests for refresh-token rotation: reuse detection and the atomic
- * claim that makes concurrent refreshes safe. The drizzle client is faked with
- * an in-memory token table so the state machine can be exercised without a
- * real Postgres.
+ * Behavioral tests for refresh-token rotation: reuse detection, the atomic
+ * claim that makes concurrent refreshes safe, the absolute session cap, and
+ * stale-row purging. The drizzle client is faked with an in-memory token
+ * table so the state machine can be exercised without a real Postgres.
  */
 import { expect, mock, test } from "bun:test";
 
@@ -16,6 +16,7 @@ type Row = {
   userId: string;
   tokenHash: string;
   expiresAt: Date;
+  absoluteExpiresAt: Date;
   revokedAt: Date | null;
 };
 
@@ -27,6 +28,9 @@ const state = {
   // "all" = revoke every active row for user-1 (revokeAllUserTokens),
   // "one" = claim only the row named by claimRowId (claimRefreshToken).
   updateMode: "one" as "all" | "one",
+  // "one" = delete the row named by claimRowId (expired-row cleanup),
+  // "stale" = delete user-1's expired rows (purgeStaleTokens).
+  deleteMode: "one" as "one" | "stale",
   claimRowId: "",
 };
 
@@ -59,6 +63,7 @@ const fakeDb = {
           userId: values.userId!,
           tokenHash: values.tokenHash!,
           expiresAt: values.expiresAt!,
+          absoluteExpiresAt: values.absoluteExpiresAt!,
           revokedAt: values.revokedAt ?? null,
         };
         state.tokens.push(row);
@@ -92,14 +97,21 @@ const fakeDb = {
   delete() {
     return {
       where() {
-        state.tokens = state.tokens.filter((r) => r.id !== state.claimRowId);
+        if (state.deleteMode === "stale") {
+          state.tokens = state.tokens.filter(
+            (r) =>
+              !(r.userId === "user-1" && r.expiresAt.getTime() < Date.now()),
+          );
+        } else {
+          state.tokens = state.tokens.filter((r) => r.id !== state.claimRowId);
+        }
         return Promise.resolve();
       },
     };
   },
 };
 
-// Real table objects so the fake can be table-aware if needed later.
+// Real table objects so the fake stays table-aware.
 const schema = await import("../db/schema/user");
 const schemaTokens = await import("../db/schema/refresh-token");
 
@@ -124,6 +136,18 @@ const testUser = {
   password: "x",
   role: "student" as const,
 };
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function makeRow(overrides: Partial<Row> & { id: string; tokenHash: string }): Row {
+  return {
+    userId: "user-1",
+    expiresAt: new Date(Date.now() + 60 * 1000),
+    absoluteExpiresAt: new Date(Date.now() + 90 * DAY_MS),
+    revokedAt: null,
+    ...overrides,
+  };
+}
 
 function makeRes(onDone: () => void) {
   const res = {
@@ -184,19 +208,14 @@ function reset() {
   state.inserted = [];
   state.selectQueue = [];
   state.updateMode = "one";
+  state.deleteMode = "one";
   state.claimRowId = "";
 }
 
 test("rotates a valid token: old row revoked, new row inserted, new cookie set", async () => {
   reset();
   const token = generateRefreshToken("user-1");
-  const row: Row = {
-    id: "tok-active",
-    userId: "user-1",
-    tokenHash: hashToken(token),
-    expiresAt: new Date(Date.now() + 1000 * 60),
-    revokedAt: null,
-  };
+  const row = makeRow({ id: "tok-active", tokenHash: hashToken(token) });
   state.tokens = [row];
   state.selectQueue = [[row], [testUser]];
   state.claimRowId = row.id;
@@ -216,20 +235,15 @@ test("rotates a valid token: old row revoked, new row inserted, new cookie set",
 test("replaying a revoked (rotated-out) token revokes ALL of the user's tokens", async () => {
   reset();
   const stolen = generateRefreshToken("user-1");
-  const oldRow: Row = {
+  const oldRow = makeRow({
     id: "tok-old",
-    userId: "user-1",
     tokenHash: hashToken(stolen),
-    expiresAt: new Date(Date.now() + 1000 * 60),
     revokedAt: new Date(), // already rotated out
-  };
-  const otherActive: Row = {
+  });
+  const otherActive = makeRow({
     id: "tok-other",
-    userId: "user-1",
     tokenHash: hashToken(generateRefreshToken("user-1")),
-    expiresAt: new Date(Date.now() + 1000 * 60),
-    revokedAt: null,
-  };
+  });
   state.tokens = [oldRow, otherActive];
   state.selectQueue = [[oldRow]];
   state.updateMode = "all";
@@ -254,15 +268,73 @@ test("unknown token: 401, cookie cleared, nothing minted", async () => {
   expect(state.inserted.length).toBe(0);
 });
 
+test("rotation never extends past the absolute session cap", async () => {
+  reset();
+  const token = generateRefreshToken("user-1");
+  // Cap is 1 minute away; the sliding expiry (30d) would overshoot it.
+  const absolute = new Date(Date.now() + 60 * 1000);
+  const row = makeRow({
+    id: "tok-capped",
+    tokenHash: hashToken(token),
+    absoluteExpiresAt: absolute,
+  });
+  state.tokens = [row];
+  state.selectQueue = [[row], [testUser]];
+  state.claimRowId = row.id;
+
+  const { error } = await runRefresh({ refreshToken: token });
+
+  expect(error).toBeNull();
+  expect(state.inserted.length).toBe(1);
+  expect(state.inserted[0]!.expiresAt.getTime()).toBe(absolute.getTime());
+  expect(state.inserted[0]!.absoluteExpiresAt.getTime()).toBe(absolute.getTime());
+});
+
+test("session past its absolute cap is refused", async () => {
+  reset();
+  const token = generateRefreshToken("user-1");
+  const row = makeRow({
+    id: "tok-expired-lineage",
+    tokenHash: hashToken(token),
+    absoluteExpiresAt: new Date(Date.now() - 1000), // hard cap passed
+  });
+  state.tokens = [row];
+  state.selectQueue = [[row]];
+  state.claimRowId = row.id;
+
+  const { res, error } = await runRefresh({ refreshToken: token });
+
+  expect(error).toBeDefined();
+  expect(res.clearArgs).not.toBeNull();
+  expect(state.inserted.length).toBe(0);
+});
+
+test("refresh purges fully-stale rows for the user", async () => {
+  reset();
+  const token = generateRefreshToken("user-1");
+  const stale = makeRow({
+    id: "tok-stale",
+    tokenHash: "stale-hash",
+    expiresAt: new Date(Date.now() - 1000), // expired long ago
+  });
+  const row = makeRow({ id: "tok-good", tokenHash: hashToken(token) });
+  state.tokens = [stale, row];
+  state.selectQueue = [[row], [testUser]];
+  state.claimRowId = row.id;
+  state.deleteMode = "stale";
+
+  const { error } = await runRefresh({ refreshToken: token });
+
+  expect(error).toBeNull();
+  expect(state.tokens.find((t) => t.id === "tok-stale")).toBeUndefined();
+});
+
 test("concurrent refresh: only the first claim wins", async () => {
   reset();
-  const row: Row = {
+  const row = makeRow({
     id: "tok-race",
-    userId: "user-1",
     tokenHash: hashToken(generateRefreshToken("user-1")),
-    expiresAt: new Date(Date.now() + 1000 * 60),
-    revokedAt: null,
-  };
+  });
   state.tokens = [row];
   state.claimRowId = row.id;
 
@@ -275,32 +347,16 @@ test("concurrent refresh: only the first claim wins", async () => {
 test("revokeAllUserTokens leaves nothing active", async () => {
   reset();
   state.tokens = [
-    {
-      id: "a",
-      userId: "user-1",
-      tokenHash: "h1",
-      expiresAt: new Date(Date.now() + 1000),
-      revokedAt: null,
-    },
-    {
-      id: "b",
-      userId: "user-1",
-      tokenHash: "h2",
-      expiresAt: new Date(Date.now() + 1000),
-      revokedAt: null,
-    },
-    {
-      id: "c",
-      userId: "user-2",
-      tokenHash: "h3",
-      expiresAt: new Date(Date.now() + 1000),
-      revokedAt: null,
-    },
+    makeRow({ id: "a", tokenHash: "h1" }),
+    makeRow({ id: "b", tokenHash: "h2" }),
+    makeRow({ id: "c", tokenHash: "h3", userId: "user-2" }),
   ];
   state.updateMode = "all";
 
   await revokeAllUserTokens("user-1");
 
-  expect(state.tokens.filter((t) => t.userId === "user-1" && !t.revokedAt)).toEqual([]);
+  expect(
+    state.tokens.filter((t) => t.userId === "user-1" && !t.revokedAt),
+  ).toEqual([]);
   expect(state.tokens.find((t) => t.id === "c")!.revokedAt).toBeNull();
 });

@@ -43,6 +43,7 @@ const ROUTES_WITHOUT_REFRESH = [
   "/auth/register",
   "/auth/refresh",
   "/auth/logout",
+  "/auth/logout-all",
 ];
 
 const GUEST_PATHS = ["/login", "/register"];

@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, lt } from "drizzle-orm";
 import { db, refreshTokensTable } from "../db";
 
 /**
@@ -38,4 +38,21 @@ export async function claimRefreshToken(
     .returning({ id: refreshTokensTable.id });
 
   return claimed;
+}
+
+/**
+ * Deletes rows whose sliding expiry has passed. Those tokens can never be
+ * replayed (the JWT itself is expired), so they are safe to drop — this is
+ * what keeps the table from growing forever. Revoked-but-unexpired rows are
+ * deliberately kept: they are the reuse-detection record.
+ */
+export async function purgeStaleTokens(userId: string): Promise<void> {
+  await db
+    .delete(refreshTokensTable)
+    .where(
+      and(
+        eq(refreshTokensTable.userId, userId),
+        lt(refreshTokensTable.expiresAt, new Date()),
+      ),
+    );
 }
