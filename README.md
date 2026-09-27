@@ -63,6 +63,11 @@ or `NEXT_PUBLIC_API_URL` to bypass the proxy and call a directly exposed API
 | POST | `/auth/logout-all` | bearer | end **every** session for the user |
 | GET | `/auth/me` | bearer | current user (fresh from the DB) |
 | GET | `/health` | — | liveness |
+| GET | `/` | — | interactive HTML docs for this API (also at `/api`) |
+
+`GET /` serves a human-friendly landing page — endpoint reference, copy-pasteable
+curl flows, and a live health check (styles/scripts come from `/assets/home.*`,
+which keeps helmet's default CSP happy).
 
 ## Deploying the API to Vercel
 
@@ -106,6 +111,7 @@ Project settings (this repo is a workspace monorepo):
 | --- | --- |
 | Root Directory | `apps/api` |
 | Include files outside the Root Directory | **on** (the workspace + `bun.lock` live at the repo root) |
+| Build Command | `bun run start` (replaces the default `turbo run build`, which runs no tasks here — the entry's `listen()` is skipped when `VERCEL` is set, so this just loads the app and exits) |
 | Framework Preset | Other (also pinned via `vercel.json` `framework: null`) |
 | Install Command | leave default (auto-detects Bun from `bun.lock`) |
 

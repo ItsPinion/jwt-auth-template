@@ -6,6 +6,7 @@ import helmet from "helmet";
 import morgan from "morgan";
 import { authRoutes } from "./routes/auth.routes.js";
 import { errorHandler } from "./middleware/error.js";
+import { renderHomePage, HOME_CSS, HOME_JS } from "./views/home-page.js";
 
 // Log configuration problems once at startup so a broken deployment is
 // diagnosable from the function logs in seconds (e.g. `vercel logs`). Never
@@ -79,6 +80,27 @@ app.use("/auth", authRoutes);
 app.get("/health", (_, res) => {
   res.json({ status: "ok" });
 });
+
+// Human-friendly landing page (this project is API-only, so the root URL is
+// the natural place for discoverable docs). Styles/scripts are separate
+// same-origin assets because helmet's default CSP blocks inline ones.
+app.get("/", (_, res) => {
+  res
+    .status(200)
+    .type("html")
+    .send(
+      renderHomePage({
+        environment: process.env.NODE_ENV === "production" ? "production" : "development",
+      }),
+    );
+});
+app.get("/assets/home.css", (_, res) => {
+  res.type("css").send(HOME_CSS);
+});
+app.get("/assets/home.js", (_, res) => {
+  res.type("js").send(HOME_JS);
+});
+
 // Error handling middleware
 app.use(errorHandler);
 

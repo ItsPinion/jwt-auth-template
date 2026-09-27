@@ -68,3 +68,36 @@ test("importing the app with no env vars must not crash (cold-start regression)"
   expect(proc.exitCode).toBe(0);
   expect(stdout).toContain("MODULE_LOAD_OK");
 });
+
+test("GET / serves the HTML landing page", async () => {
+  const res = await fetch(`${base}/`);
+  expect(res.status).toBe(200);
+  expect(res.headers.get("content-type")).toContain("text/html");
+  const html = await res.text();
+  expect(html).toContain("JWT Auth Template");
+  expect(html).toContain("/auth/register");
+  expect(html).toContain("/auth/login");
+  expect(html).toContain("/auth/refresh");
+  expect(html).toContain("/auth/logout-all");
+  // helmet's default CSP blocks inline scripts/styles — the page must load
+  // both from same-origin asset routes instead.
+  expect(html).not.toContain("<script>"); // only <script src=...>
+  expect(html).toContain('<script src="/assets/home.js">');
+  expect(html).toContain('href="/assets/home.css"');
+});
+
+test("the landing page is also served under the /api prefix", async () => {
+  const res = await fetch(`${base}/api`);
+  expect(res.status).toBe(200);
+  expect(res.headers.get("content-type")).toContain("text/html");
+});
+
+test("landing page assets are served with the right content types", async () => {
+  const css = await fetch(`${base}/assets/home.css`);
+  expect(css.status).toBe(200);
+  expect(css.headers.get("content-type")).toContain("text/css");
+
+  const js = await fetch(`${base}/assets/home.js`);
+  expect(js.status).toBe(200);
+  expect(js.headers.get("content-type")).toContain("javascript");
+});
