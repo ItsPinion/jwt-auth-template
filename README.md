@@ -80,7 +80,9 @@ or `NEXT_PUBLIC_API_URL` to bypass the proxy and call a directly exposed API
   in `apps/api/src/middleware/authorize.ts`).
 - **Transport/abuse**: helmet, strict CORS (when used), per-IP rate limits on
   credential and session endpoints (set `TRUST_PROXY` behind a reverse proxy).
-- **Access tokens** are kept in memory on the client (never localStorage).
+- **Access tokens** are kept in memory on the client (never localStorage);
+  `/dashboard` is gated twice: a middleware cookie-presence check (fast bounce
+  to `/login`) and a real session check in the page.
 
 ### Known gaps (bring your own before production)
 
