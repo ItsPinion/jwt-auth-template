@@ -6,10 +6,10 @@ import {
   logout,
   logoutAll,
   refresh,
-} from "../controllers/auth.controller.ts";
-import { auth } from "../middleware/auth.ts";
-import { validate } from "../middleware/validate.ts";
-import { credentialLimiter, sessionLimiter } from "../middleware/rate-limit.ts";
+} from "../controllers/auth.controller";
+import { auth } from "../middleware/auth";
+import { validate } from "../middleware/validate";
+import { credentialLimiter, sessionLimiter } from "../middleware/rate-limit";
 import { loginSchema, registerSchema } from "@repo/shared";
 
 export const authRoutes = Router();

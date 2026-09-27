@@ -21,7 +21,7 @@ if (trustProxy) {
 
 // Middleware
 app.use(helmet());
-app.use(morgan("dev"));
+app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 app.use(
   cors({
     origin: process.env.CLIENT_URL || "http://localhost:3000",
