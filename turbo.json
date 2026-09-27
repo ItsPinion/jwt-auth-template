@@ -5,6 +5,7 @@
     "NEXT_PUBLIC_API_URL",
     "API_PROXY_URL",
     "NODE_ENV",
+    "VERCEL",
     "PORT",
     "DATABASE_URL",
     "CLIENT_URL",

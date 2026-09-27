@@ -63,6 +63,42 @@ or `NEXT_PUBLIC_API_URL` to bypass the proxy and call a directly exposed API
 | GET | `/auth/me` | bearer | current user (fresh from the DB) |
 | GET | `/health` | — | liveness |
 
+## Deploying the API to Vercel
+
+The API deploys as a single Vercel Function (Node runtime). The function entry is
+`apps/api/api/index.ts`, which re-exports the Express app; `vercel.json` pins that
+as the only function (so Vercel's entry-file auto-detection can't pick up something
+else and crash) and rewrites root paths like `/health` and `/auth/*` to it.
+
+Project settings (this repo is a workspace monorepo):
+
+| Setting | Value |
+| --- | --- |
+| Root Directory | `apps/api` |
+| Include files outside the Root Directory | **on** (the workspace + `bun.lock` live at the repo root) |
+| Framework Preset | Other (also pinned via `vercel.json` `framework: null`) |
+| Install Command | leave default (auto-detects Bun from `bun.lock`) |
+
+Environment variables (set for Production **and** Preview — a cold start with a
+missing one used to fail every route with `500 FUNCTION_INVOCATION_FAILED`):
+
+| Variable | Required | Notes |
+| --- | --- | --- |
+| `DATABASE_URL` | ✅ | Postgres/Neon connection string |
+| `ACCESS_TOKEN_SECRET` | ✅ | long random value |
+| `REFRESH_SECRET` | ✅ | long random value, different from the above |
+| `ACCESS_TOKEN_EXPIRES_IN` | optional | default `15m` |
+| `REFRESH_EXPIRES_IN` | optional | default `30d` |
+| `CLIENT_URL` | optional | web origin, only needed if the web app calls the API cross-origin instead of through its `/api` proxy |
+
+The API answers at the deployment root (`https://<project>.vercel.app/health`,
+`/auth/...`) and equivalently under `/api/*`. `TRUST_PROXY` is not needed on
+Vercel (it is set automatically there). If a request fails, `vercel logs` shows
+a one-line message naming any missing environment variable.
+
+If the web app is deployed too, point its `API_PROXY_URL` at
+`https://<project>.vercel.app` so `/api/*` proxies to the API same-origin.
+
 ## Security model (what's implemented)
 
 - **Passwords**: bcrypt (cost 12), min 8 / max 72 chars (bcrypt truncates), small
