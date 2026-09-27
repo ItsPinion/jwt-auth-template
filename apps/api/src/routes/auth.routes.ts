@@ -8,16 +8,22 @@ import {
 } from "../controllers/auth.controller.ts";
 import { auth } from "../middleware/auth.ts";
 import { validate } from "../middleware/validate.ts";
+import { credentialLimiter, sessionLimiter } from "../middleware/rate-limit.ts";
 import { loginSchema, registerSchema } from "@repo/shared";
 
 export const authRoutes = Router();
 
-authRoutes.post("/register", validate(registerSchema), register);
+authRoutes.post(
+  "/register",
+  credentialLimiter,
+  validate(registerSchema),
+  register,
+);
 
-authRoutes.post("/login", validate(loginSchema), login);
+authRoutes.post("/login", credentialLimiter, validate(loginSchema), login);
 
-authRoutes.post("/logout", logout);
+authRoutes.post("/logout", sessionLimiter, logout);
 
-authRoutes.post("/refresh", refresh);
+authRoutes.post("/refresh", sessionLimiter, refresh);
 
 authRoutes.get("/me", auth, me);

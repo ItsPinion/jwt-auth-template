@@ -9,6 +9,15 @@ const PORT = process.env.PORT || 8000;
 
 const app = express();
 
+// Behind a reverse proxy (nginx, a PaaS router, a tunnel), set TRUST_PROXY so
+// req.clientIp reflects the client and not the proxy. Accepts the values
+// express understands: a hop count ("1"), "true", or a custom value
+// (e.g. "loopback"). Leave unset when clients connect directly.
+const trustProxy = process.env.TRUST_PROXY;
+if (trustProxy) {
+  app.set("trust proxy", /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy);
+}
+
 // Middleware
 app.use(helmet());
 app.use(morgan("dev"));
