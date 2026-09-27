@@ -1,7 +1,13 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios";
 import type { ApiResponse, AuthPayload } from "@/types";
 
-const baseURL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// Same-origin by default: requests go to `/api/*` on the web origin and the
+// rewrite in next.config.js proxies them to the API (API_PROXY_URL). This
+// avoids CORS entirely and works in hosted/preview environments where the
+// browser cannot reach the API's own host. Set NEXT_PUBLIC_API_URL to call a
+// directly exposed API instead (that API must allow this origin with
+// credentials in its CORS config).
+const baseURL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
 let accessToken: string | null = null;
 
@@ -111,9 +117,20 @@ api.interceptors.response.use(
 );
 
 export function getApiErrorMessage(error: unknown): string {
-  if (axios.isAxiosError<ApiResponse<null>>(error)) {
-    if (error.response?.data?.message) {
-      return error.response.data.message;
+  if (axios.isAxiosError<ApiResponse<{ errors?: Record<string, string[]> }>>(error)) {
+    const data = error.response?.data;
+
+    if (data?.message) {
+      return data.message;
+    }
+
+    // Validation failures carry field errors in data.errors.
+    const fieldErrors = data?.data?.errors;
+    if (fieldErrors) {
+      const first = Object.values(fieldErrors).flat()[0];
+      if (first) {
+        return first;
+      }
     }
 
     if (error.code === AxiosError.ERR_NETWORK) {
