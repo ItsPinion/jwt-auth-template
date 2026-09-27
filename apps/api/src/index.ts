@@ -33,12 +33,9 @@ app.use(cookieParser());
 // Routes
 app.use("/auth", authRoutes);
 
-// Testing routes
+// Health check
 app.get("/health", (_, res) => {
   res.json({ status: "ok" });
-});
-app.get("/test-error", () => {
-  throw new Error("Boom");
 });
 // Error handling middleware
 app.use(errorHandler);
