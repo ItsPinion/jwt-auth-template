@@ -159,7 +159,25 @@ export const login = asyncHandler(
 );
 
 export const me = asyncHandler(async (req: Request, res: Response) => {
-  success(res, StatusCodes.OK, "User fetched successfully", { user: req.user });
+  if (!req.user) {
+    throw new AppError("Unauthorized", StatusCodes.UNAUTHORIZED);
+  }
+
+  // Read from the DB rather than echoing the access-token claims, so profile
+  // changes (e.g. a role update) are visible before the token expires.
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, req.user.id))
+    .limit(1);
+
+  if (!user) {
+    throw new AppError("Unauthorized", StatusCodes.UNAUTHORIZED);
+  }
+
+  success(res, StatusCodes.OK, "User fetched successfully", {
+    user: { id: user.id, email: user.email, role: user.role },
+  });
 });
 
 export const logout = asyncHandler(async (req: Request, res: Response) => {
