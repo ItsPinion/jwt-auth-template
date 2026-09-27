@@ -7,7 +7,11 @@
     "moduleDetection": "force",
     "jsx": "react-jsx",
     "allowJs": true,
-    "types": ["bun"],
+    // Both runtimes matter: "bun" for dev/test globals (bun:test), "node" for
+    // the deployed target. `types` is a whitelist — Vercel's function compile
+    // found no Node globals (process, crypto, console) without "node", which
+    // cascaded into broken Express typings.
+    "types": ["node", "bun"],
 
     // Bundler mode
     "moduleResolution": "bundler",
