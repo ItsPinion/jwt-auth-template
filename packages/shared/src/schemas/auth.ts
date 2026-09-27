@@ -3,7 +3,14 @@ import { z } from "zod";
 export const roles = ["student", "teacher", "admin"] as const;
 export const roleSchema = z.enum(roles);
 
-const emailSchema = z.email("Enter a valid email address.");
+/** Canonical form used for storage and lookups: trimmed + lowercased. */
+export function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+const emailSchema = z
+  .email("Enter a valid email address.")
+  .transform(normalizeEmail);
 const passwordSchema = z
   .string()
   .min(8, "Password must be at least 8 characters.");

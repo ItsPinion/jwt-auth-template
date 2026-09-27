@@ -10,8 +10,9 @@ import { db, usersTable, refreshTokensTable } from "../db";
 import { hashToken } from "../lib/hash";
 import { getJwtExpiresInMs } from "../../env";
 import type { LoginInput, RegisterInput } from "@repo/shared";
+import { normalizeEmail } from "@repo/shared";
 import { asyncHandler } from "../middleware/async-handler";
-import { AppError } from "../lib/error";
+import { AppError, isUniqueViolation } from "../lib/error";
 import { StatusCodes } from "http-status-codes";
 import {
   getRefreshTokenExpiresAt,
@@ -23,7 +24,10 @@ import { created, success } from "../lib/response";
 
 export const register = asyncHandler(
   async (req: Request<{}, {}, RegisterInput>, res: Response) => {
-    const { email, password, role } = req.body;
+    // Schema already normalizes; normalize again so this handler is safe
+    // regardless of the middleware chain it runs behind.
+    const email = normalizeEmail(req.body.email);
+    const { password, role } = req.body;
 
     const [existingUser] = await db
       .select()
@@ -37,14 +41,24 @@ export const register = asyncHandler(
 
     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 
-    const [user] = await db
-      .insert(usersTable)
-      .values({
-        email: email.trim().toLowerCase(),
-        password: hashedPassword,
-        role,
-      })
-      .returning();
+    let user;
+    try {
+      [user] = await db
+        .insert(usersTable)
+        .values({
+          email,
+          password: hashedPassword,
+          role,
+        })
+        .returning();
+    } catch (err) {
+      // Concurrent registration can slip past the check above; the UNIQUE
+      // index is the source of truth.
+      if (isUniqueViolation(err)) {
+        throw new AppError("Email already in use.", StatusCodes.CONFLICT);
+      }
+      throw err;
+    }
 
     if (!user) {
       throw new AppError(
@@ -76,12 +90,13 @@ export const register = asyncHandler(
 
 export const login = asyncHandler(
   async (req: Request<{}, {}, LoginInput>, res: Response) => {
-    const { email, password } = req.body;
+    const email = normalizeEmail(req.body.email);
+    const { password } = req.body;
 
     const [user] = await db
       .select()
       .from(usersTable)
-      .where(eq(usersTable.email, email.trim().toLowerCase()))
+      .where(eq(usersTable.email, email))
       .limit(1);
 
     if (!user) {
