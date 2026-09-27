@@ -36,7 +36,12 @@ export const auth = asyncHandler(
       req.user = decoded;
 
       next();
-    } catch {
+    } catch (err) {
+      // Configuration problems (e.g. placeholder secrets) are server errors,
+      // not bad tokens — surface them as-is.
+      if (err instanceof AppError) {
+        throw err;
+      }
       throw new AppError("Invalid or expired token", StatusCodes.UNAUTHORIZED);
     }
   },

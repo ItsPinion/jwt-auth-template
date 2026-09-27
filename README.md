@@ -48,6 +48,7 @@ or `NEXT_PUBLIC_API_URL` to bypass the proxy and call a directly exposed API
 | root | `bun run lint` | lint every package |
 | `apps/api` | `bun run dev` / `bun run start` | run the API (hot / plain) |
 | `apps/api` | `bun test` | unit + behavior tests |
+| `apps/api` | `bun run db:check` | read-only diagnostics: env, DB connectivity, tables |
 | `apps/api` | `bun run db:generate` / `db:migrate` / `db:push` | migrations |
 | `apps/web` | `bun run dev` | run the web app |
 
@@ -95,6 +96,19 @@ The API answers at the deployment root (`https://<project>.vercel.app/health`,
 `/auth/...`) and equivalently under `/api/*`. `TRUST_PROXY` is not needed on
 Vercel (it is set automatically there). If a request fails, `vercel logs` shows
 a one-line message naming any missing environment variable.
+
+Before deploying, run `bun run db:check` locally: it verifies the environment
+(no example placeholders!), that the driver can reach the database, and that
+migrations have been run. Two rules for Vercel env vars specifically:
+
+- **Do not set `NODE_ENV=development` there** — leave it unset (or
+  `production`). Development mode relaxes cookie security (no `Secure`, no
+  `__Host-` prefix).
+- **Never use the example placeholder secrets** — auth routes refuse to run
+  with them by design. Generate with `openssl rand -hex 32` and store the
+  values only in Vercel's environment settings (or a secret manager), never
+  in a committed file. If a secret leaks anywhere (chat, logs, a screenshot),
+  rotate it immediately.
 
 If the web app is deployed too, point its `API_PROXY_URL` at
 `https://<project>.vercel.app` so `/api/*` proxies to the API same-origin.

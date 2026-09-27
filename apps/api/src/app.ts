@@ -7,19 +7,31 @@ import morgan from "morgan";
 import { authRoutes } from "./routes/auth.routes";
 import { errorHandler } from "./middleware/error";
 
-// Log missing configuration once at startup so a broken deployment is
-// diagnosable from the function logs in seconds (e.g. `vercel logs`).
+// Log configuration problems once at startup so a broken deployment is
+// diagnosable from the function logs in seconds (e.g. `vercel logs`). Never
+// throw here — a boot crash fails even /health (the classic
+// 500 FUNCTION_INVOCATION_FAILED).
 const REQUIRED_ENV = [
   "DATABASE_URL",
   "ACCESS_TOKEN_SECRET",
   "REFRESH_SECRET",
 ] as const;
-const missing = REQUIRED_ENV.filter((name) => !process.env[name]);
-if (missing.length > 0) {
+const problems = REQUIRED_ENV.flatMap((name) => {
+  const value = process.env[name];
+  if (!value) {
+    return [`${name} is missing`];
+  }
+  if (value.startsWith("replace-with-")) {
+    return [`${name} is still the example placeholder`];
+  }
+  return [];
+});
+if (problems.length > 0) {
   console.error(
-    `[auth] Missing environment variables: ${missing.join(", ")}. ` +
-      `Routes that depend on them will fail until they are set ` +
-      `(on Vercel: Project → Settings → Environment Variables).`,
+    `[auth] Environment problems: ${problems.join("; ")}. ` +
+      `Routes that depend on them will fail until fixed — generate secrets ` +
+      `with: openssl rand -hex 32 (on Vercel: Project → Settings → ` +
+      `Environment Variables).`,
   );
 }
 
