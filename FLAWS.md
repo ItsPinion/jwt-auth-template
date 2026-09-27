@@ -1,5 +1,12 @@
 # Flaw Report — `jwt-auth-template`
 
+> **Status (2026-09-27): all findings below are FIXED** — see the `fix(...)`/`chore(...)`/
+> `feat(...)` commits on this branch, one per item. The only intentionally deferred items are
+> product features noted under #13 (email verification, password-reset flow) and breach-list
+> password checking; they are documented as known gaps in the README. Item #7 was resolved by
+> making registration student-only (the role picker was removed); tell us if you'd rather keep
+> teacher self-signup with an approval flow instead.
+
 Static review of the monorepo (Express/Bun API + Next.js web + shared Zod schemas), with the
 most important claims verified empirically (cookie behavior, Zod parsing, ESLint 10 behavior,
 expiry math). Ordered by severity.
