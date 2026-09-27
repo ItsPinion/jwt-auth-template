@@ -1,4 +1,4 @@
-export * from "./client";
+export * from "./client.js";
 
-export * from "./schema/user";
-export * from "./schema/refresh-token";
+export * from "./schema/user.js";
+export * from "./schema/refresh-token.js";

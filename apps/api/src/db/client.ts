@@ -1,7 +1,7 @@
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
 import { StatusCodes } from "http-status-codes";
-import { AppError } from "../lib/error";
+import { AppError } from "../lib/error.js";
 
 function buildDb(databaseUrl: string) {
   return drizzle({ client: neon(databaseUrl) });

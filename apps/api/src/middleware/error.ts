@@ -1,6 +1,6 @@
 import type { ErrorRequestHandler } from "express";
 import { StatusCodes } from "http-status-codes";
-import { AppError } from "../lib/error";
+import { AppError } from "../lib/error.js";
 
 export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
   if (res.headersSent) {

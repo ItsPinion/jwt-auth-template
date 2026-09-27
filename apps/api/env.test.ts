@@ -4,7 +4,7 @@
  * puts in the env vars.
  */
 import { expect, test } from "bun:test";
-import { getJwtExpiresIn, getJwtExpiresInMs } from "./env";
+import { getJwtExpiresIn, getJwtExpiresInMs } from "./env.js";
 import ms from "ms";
 
 const cases: Array<[string, string | undefined]> = [

@@ -7,18 +7,18 @@ import {
   generateAccessToken,
   generateRefreshToken,
   verifyRefreshToken,
-} from "../lib/jwt";
-import { db, usersTable, refreshTokensTable } from "../db";
-import { hashToken } from "../lib/hash";
+} from "../lib/jwt.js";
+import { db, usersTable, refreshTokensTable } from "../db/index.js";
+import { hashToken } from "../lib/hash.js";
 import {
   claimRefreshToken,
   purgeStaleTokens,
   revokeAllUserTokens,
-} from "../lib/refresh-tokens";
+} from "../lib/refresh-tokens.js";
 import type { LoginInput, RegisterInput } from "@repo/shared";
 import { normalizeEmail } from "@repo/shared";
-import { asyncHandler } from "../middleware/async-handler";
-import { AppError, isUniqueViolation } from "../lib/error";
+import { asyncHandler } from "../middleware/async-handler.js";
+import { AppError, isUniqueViolation } from "../lib/error.js";
 import { StatusCodes } from "http-status-codes";
 import {
   getAbsoluteSessionExpiresAt,
@@ -26,9 +26,9 @@ import {
   getRotatedExpiresAt,
   REFRESH_COOKIE_NAME,
   refreshCookieOptions,
-} from "../config/cookies";
-import { SALT_ROUNDS, compareAgainstDummy } from "../config/auth";
-import { created, success } from "../lib/response";
+} from "../config/cookies.js";
+import { SALT_ROUNDS, compareAgainstDummy } from "../config/auth.js";
+import { created, success } from "../lib/response.js";
 
 export const register = asyncHandler(
   async (

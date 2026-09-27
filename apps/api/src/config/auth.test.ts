@@ -3,7 +3,7 @@
  * verification so login timing can't enumerate accounts.
  */
 import { expect, test } from "bun:test";
-import { compareAgainstDummy } from "./auth";
+import { compareAgainstDummy } from "./auth.js";
 
 test("compareAgainstDummy runs real bcrypt work and never matches", async () => {
   const started = performance.now();
