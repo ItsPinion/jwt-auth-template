@@ -67,9 +67,20 @@ or `NEXT_PUBLIC_API_URL` to bypass the proxy and call a directly exposed API
 ## Deploying the API to Vercel
 
 The API deploys as a single Vercel Function (Node runtime). The function entry is
-`apps/api/api/index.ts`, which re-exports the Express app; `vercel.json` pins that
-as the only function (so Vercel's entry-file auto-detection can't pick up something
-else and crash) and rewrites root paths like `/health` and `/auth/*` to it.
+`apps/api/api/index.ts`, which re-exports the Express app from `src/app.ts`.
+`vercel.json` keeps the deployment deterministic:
+
+- `framework: null` — disables Vercel's Express entry-file auto-detection (it can
+  otherwise build extra entry functions that crash at invocation).
+- `functions` pin — gives `api/index.ts` `maxDuration: 30` (it is also the one
+  property Vercel's schema requires on a function config).
+- `routes` — after the filesystem (static files in `public/`, e.g. `robots.txt`,
+  which also satisfies Vercel's required output directory for API-only projects),
+  every other path is routed to the function while a `request.path` transform
+  preserves the original URL, so both `/health` and `/api/health` reach the app.
+
+The API tsconfig whitelists `["node", "bun"]` types plus `@types/node` so Vercel's
+function compile step sees Node globals (`process`, `Buffer`, …).
 
 Project settings (this repo is a workspace monorepo):
 
@@ -95,7 +106,8 @@ missing one used to fail every route with `500 FUNCTION_INVOCATION_FAILED`):
 The API answers at the deployment root (`https://<project>.vercel.app/health`,
 `/auth/...`) and equivalently under `/api/*`. `TRUST_PROXY` is not needed on
 Vercel (it is set automatically there). If a request fails, `vercel logs` shows
-a one-line message naming any missing environment variable.
+a one-line message naming any missing environment variable. To verify a fresh
+deployment: `curl -i https://<project>.vercel.app/health` — expect `200`.
 
 Before deploying, run `bun run db:check` locally: it verifies the environment
 (no example placeholders!), that the driver can reach the database, and that

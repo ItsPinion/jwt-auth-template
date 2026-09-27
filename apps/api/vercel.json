@@ -6,7 +6,20 @@
       "maxDuration": 30
     }
   },
-  "rewrites": [
-    { "source": "/:path*", "destination": "/api/:path*" }
+  "routes": [
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/api",
+      "transforms": [
+        {
+          "type": "request.path",
+          "op": "set",
+          "args": "/$1"
+        }
+      ]
+    }
   ]
 }
