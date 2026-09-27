@@ -1,47 +1,13 @@
-import "dotenv/config";
-import express from "express";
-import cors from "cors";
-import { authRoutes } from "./routes/auth.routes";
-import cookieParser from "cookie-parser";
-import helmet from "helmet";
-import morgan from "morgan";
-import { errorHandler } from "./middleware/error";
-const PORT = process.env.PORT || 8000;
+import app from "./app";
 
-const app = express();
+export default app;
 
-// Behind a reverse proxy (nginx, a PaaS router, a tunnel), set TRUST_PROXY so
-// req.clientIp reflects the client and not the proxy. Accepts the values
-// express understands: a hop count ("1"), "true", or a custom value
-// (e.g. "loopback"). Leave unset when clients connect directly.
-const trustProxy = process.env.TRUST_PROXY;
-if (trustProxy) {
-  app.set("trust proxy", /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy);
+// Long-running hosts (local dev, a VM, Render, Fly, ...) bind a port. Vercel
+// invokes the exported app as a serverless function instead — calling listen()
+// there is never what you want.
+if (!process.env.VERCEL) {
+  const PORT = process.env.PORT || 8000;
+  app.listen(PORT, () => {
+    console.log(`API running on http://localhost:${PORT}`);
+  });
 }
-
-// Middleware
-app.use(helmet());
-app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
-app.use(
-  cors({
-    origin: process.env.CLIENT_URL || "http://localhost:3000",
-    credentials: true,
-  }),
-);
-app.use(express.json());
-app.use(cookieParser());
-
-// Routes
-app.use("/auth", authRoutes);
-
-// Health check
-app.get("/health", (_, res) => {
-  res.json({ status: "ok" });
-});
-// Error handling middleware
-app.use(errorHandler);
-
-// Start the server
-app.listen(PORT, () => {
-  console.log(`API running on http://localhost:${PORT}`);
-});
