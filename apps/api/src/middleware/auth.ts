@@ -4,7 +4,11 @@ import { AppError } from "../lib/error";
 import { StatusCodes } from "http-status-codes";
 import { asyncHandler } from "./async-handler";
 
+// The global `Express` namespace is the augmentation point @types/express
+// supports (the "express-serve-static-core" module is not resolvable under
+// bun's isolated installs).
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       user?: JwtPayload;

@@ -3,7 +3,16 @@
   "ui": "tui",
   "globalEnv": [
     "NEXT_PUBLIC_API_URL",
-    "API_PROXY_URL"
+    "API_PROXY_URL",
+    "NODE_ENV",
+    "PORT",
+    "DATABASE_URL",
+    "CLIENT_URL",
+    "TRUST_PROXY",
+    "ACCESS_TOKEN_SECRET",
+    "ACCESS_TOKEN_EXPIRES_IN",
+    "REFRESH_SECRET",
+    "REFRESH_EXPIRES_IN"
   ],
   "tasks": {
     "build": {

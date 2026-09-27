@@ -10,9 +10,11 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "lint": "bun run eslint . --ext .ts"
+    "lint": "eslint . --max-warnings 0",
+    "test": "bun test"
   },
   "devDependencies": {
+    "@repo/eslint-config": "*",
     "@types/bcrypt": "^6.0.0",
     "@types/bun": "latest",
     "@types/cors": "^2.8.19",
@@ -21,7 +23,7 @@
     "@types/ms": "^2.1.0",
     "@types/multer": "^2.2.0",
     "drizzle-kit": "^1.0.0-rc.4",
-    "eslint": "^10.8.0",
+    "eslint": "^9.39.1",
     "tsx": "^4.23.1"
   },
   "peerDependencies": {

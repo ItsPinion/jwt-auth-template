@@ -18,7 +18,7 @@ const cases: Array<[string, string | undefined]> = [
 ];
 
 test("JWT expiresIn and ms duration always agree", () => {
-  for (const [label, value] of cases) {
+  for (const [, value] of cases) {
     const expiresIn = getJwtExpiresIn(value, "TEST_VAR");
     const durationMs = getJwtExpiresInMs(value, "TEST_VAR");
     // Both must resolve to the same underlying duration.

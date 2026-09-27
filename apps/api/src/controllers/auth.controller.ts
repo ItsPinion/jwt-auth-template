@@ -1,4 +1,6 @@
 import type { Request, Response } from "express";
+
+type RouteParams = Record<string, string | string[]>;
 import { eq } from "drizzle-orm";
 import bcrypt from "bcrypt";
 import {
@@ -12,7 +14,6 @@ import {
   claimRefreshToken,
   revokeAllUserTokens,
 } from "../lib/refresh-tokens";
-import { getJwtExpiresInMs } from "../../env";
 import type { LoginInput, RegisterInput } from "@repo/shared";
 import { normalizeEmail } from "@repo/shared";
 import { asyncHandler } from "../middleware/async-handler";
@@ -27,7 +28,10 @@ import { SALT_ROUNDS, compareAgainstDummy } from "../config/auth";
 import { created, success } from "../lib/response";
 
 export const register = asyncHandler(
-  async (req: Request<{}, {}, RegisterInput>, res: Response) => {
+  async (
+    req: Request<RouteParams, unknown, RegisterInput>,
+    res: Response,
+  ) => {
     // Schema already normalizes; normalize again so this handler is safe
     // regardless of the middleware chain it runs behind.
     const email = normalizeEmail(req.body.email);
@@ -95,7 +99,10 @@ export const register = asyncHandler(
 );
 
 export const login = asyncHandler(
-  async (req: Request<{}, {}, LoginInput>, res: Response) => {
+  async (
+    req: Request<RouteParams, unknown, LoginInput>,
+    res: Response,
+  ) => {
     const email = normalizeEmail(req.body.email);
     const { password } = req.body;
 
@@ -151,7 +158,7 @@ export const me = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const logout = asyncHandler(async (req: Request, res: Response) => {
-  let { refreshToken } = req.cookies;
+  const { refreshToken } = req.cookies;
 
   if (!refreshToken) {
     throw new AppError("already logged out.", StatusCodes.UNAUTHORIZED);
