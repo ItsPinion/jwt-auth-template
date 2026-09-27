@@ -8,6 +8,10 @@ import {
 } from "../lib/jwt";
 import { db, usersTable, refreshTokensTable } from "../db";
 import { hashToken } from "../lib/hash";
+import {
+  claimRefreshToken,
+  revokeAllUserTokens,
+} from "../lib/refresh-tokens";
 import { getJwtExpiresInMs } from "../../env";
 import type { LoginInput, RegisterInput } from "@repo/shared";
 import { normalizeEmail } from "@repo/shared";
@@ -181,11 +185,18 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
     .where(eq(refreshTokensTable.tokenHash, hashToken(refreshToken)))
     .limit(1);
 
-  if (!storedToken) {
+  if (!storedToken || storedToken.userId !== userId) {
+    res.clearCookie(REFRESH_COOKIE_NAME, refreshCookieOptions);
+
     throw new AppError("Unauthorized", StatusCodes.UNAUTHORIZED);
   }
 
   if (storedToken.revokedAt) {
+    // Reuse of a rotated-out token: it was likely stolen. End every session
+    // for this user so the thief's rotation (if any) is revoked too.
+    await revokeAllUserTokens(storedToken.userId);
+    res.clearCookie(REFRESH_COOKIE_NAME, refreshCookieOptions);
+
     throw new AppError("Unauthorized", StatusCodes.UNAUTHORIZED);
   }
 
@@ -193,6 +204,7 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
     await db
       .delete(refreshTokensTable)
       .where(eq(refreshTokensTable.id, storedToken.id));
+    res.clearCookie(REFRESH_COOKIE_NAME, refreshCookieOptions);
 
     throw new AppError("Unauthorized", StatusCodes.UNAUTHORIZED);
   }
@@ -204,6 +216,19 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
     .limit(1);
 
   if (!user) {
+    res.clearCookie(REFRESH_COOKIE_NAME, refreshCookieOptions);
+
+    throw new AppError("Unauthorized", StatusCodes.UNAUTHORIZED);
+  }
+
+  // Claim the token for rotation atomically. If another request got here
+  // first (concurrent refresh), the claim fails and we refuse instead of
+  // minting a second session from one token.
+  const claimed = await claimRefreshToken(storedToken.id);
+
+  if (!claimed) {
+    res.clearCookie(REFRESH_COOKIE_NAME, refreshCookieOptions);
+
     throw new AppError("Unauthorized", StatusCodes.UNAUTHORIZED);
   }
 
@@ -212,13 +237,6 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
     email: user.email,
     role: user.role,
   });
-
-  await db
-    .update(refreshTokensTable)
-    .set({
-      revokedAt: new Date(),
-    })
-    .where(eq(refreshTokensTable.id, storedToken.id));
 
   refreshToken = generateRefreshToken(user.id);
 
