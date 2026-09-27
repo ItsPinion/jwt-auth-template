@@ -95,6 +95,11 @@ node_modules symlinks):
 The API tsconfig whitelists `["node", "bun"]` types plus `@types/node` so Vercel's
 function compile step sees Node globals (`process`, `Buffer`, …).
 
+Source style note: relative imports inside `apps/api` carry explicit `.js`
+extensions (`import app from './app.js'` even though the file is `app.ts` — the
+standard NodeNext convention). The deployed function runs as native ESM on
+Node.js, which does not guess extensions; bun/tsx do, so it's easy to forget.
+
 Project settings (this repo is a workspace monorepo):
 
 | Setting | Value |

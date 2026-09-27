@@ -4,8 +4,8 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import morgan from "morgan";
-import { authRoutes } from "./routes/auth.routes";
-import { errorHandler } from "./middleware/error";
+import { authRoutes } from "./routes/auth.routes.js";
+import { errorHandler } from "./middleware/error.js";
 
 // Log configuration problems once at startup so a broken deployment is
 // diagnosable from the function logs in seconds (e.g. `vercel logs`). Never

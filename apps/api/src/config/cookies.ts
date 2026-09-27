@@ -1,4 +1,4 @@
-import { getJwtExpiresInMs } from "../../env";
+import { getJwtExpiresInMs } from "../../env.js";
 
 // Hard cap for a whole session lineage: rotation extends the sliding
 // expiry, but a session dies at this age no matter how active it is.

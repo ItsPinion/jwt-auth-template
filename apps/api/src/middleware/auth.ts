@@ -1,8 +1,8 @@
 import type { NextFunction, Request, Response } from "express";
-import { verifyAccessToken, type JwtPayload } from "../lib/jwt";
-import { AppError } from "../lib/error";
+import { verifyAccessToken, type JwtPayload } from "../lib/jwt.js";
+import { AppError } from "../lib/error.js";
 import { StatusCodes } from "http-status-codes";
-import { asyncHandler } from "./async-handler";
+import { asyncHandler } from "./async-handler.js";
 
 // The global `Express` namespace is the augmentation point @types/express
 // supports (the "express-serve-static-core" module is not resolvable under

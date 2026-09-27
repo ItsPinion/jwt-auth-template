@@ -8,8 +8,8 @@ import {
   generateAccessToken,
   generateRefreshToken,
   verifyAccessToken,
-} from "./jwt";
-import { AppError } from "./error";
+} from "./jwt.js";
+import { AppError } from "./error.js";
 
 const payload = { id: "u1", email: "a@b.co", role: "student" as const };
 

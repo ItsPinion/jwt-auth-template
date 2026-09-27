@@ -112,8 +112,8 @@ const fakeDb = {
 };
 
 // Real table objects so the fake stays table-aware.
-const schema = await import("../db/schema/user");
-const schemaTokens = await import("../db/schema/refresh-token");
+const schema = await import("../db/schema/user.js");
+const schemaTokens = await import("../db/schema/refresh-token.js");
 
 mock.module("../db", () => ({
   db: fakeDb,
@@ -121,8 +121,8 @@ mock.module("../db", () => ({
   refreshTokensTable: schemaTokens.refreshTokensTable,
 }));
 
-const { generateRefreshToken, verifyRefreshToken } = await import("./jwt");
-const { hashToken } = await import("./hash");
+const { generateRefreshToken, verifyRefreshToken } = await import("./jwt.js");
+const { hashToken } = await import("./hash.js");
 const { claimRefreshToken, revokeAllUserTokens } = await import(
   "./refresh-tokens"
 );

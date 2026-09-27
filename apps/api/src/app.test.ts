@@ -15,7 +15,7 @@ let server: Server;
 let base: string;
 
 beforeAll(async () => {
-  const { app } = await import("./app");
+  const { app } = await import("./app.js");
   server = createServer(app);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address() as AddressInfo;

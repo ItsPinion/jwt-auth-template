@@ -1,8 +1,8 @@
 import jwt from "jsonwebtoken";
 import { StatusCodes } from "http-status-codes";
-import { getJwtExpiresIn } from "../../env";
+import { getJwtExpiresIn } from "../../env.js";
 import type { RoleType } from "@repo/shared";
-import { AppError } from "./error";
+import { AppError } from "./error.js";
 
 export type JwtPayload = {
   id: string;

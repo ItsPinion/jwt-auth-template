@@ -5,8 +5,8 @@
  */
 import { expect, test } from "bun:test";
 import { registerSchema, loginSchema, normalizeEmail } from "@repo/shared";
-import { isUniqueViolation } from "./error";
-import { hashToken } from "./hash";
+import { isUniqueViolation } from "./error.js";
+import { hashToken } from "./hash.js";
 
 test("emails are normalized before storage/lookup", () => {
   const parsed = registerSchema.parse({

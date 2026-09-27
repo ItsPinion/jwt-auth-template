@@ -1,5 +1,5 @@
 import { and, eq, isNull, lt } from "drizzle-orm";
-import { db, refreshTokensTable } from "../db";
+import { db, refreshTokensTable } from "../db/index.js";
 
 /**
  * Revokes every refresh token belonging to a user. Used when token reuse is
