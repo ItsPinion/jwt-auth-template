@@ -6,7 +6,7 @@ import helmet from "helmet";
 import morgan from "morgan";
 import { authRoutes } from "./routes/auth.routes.js";
 import { errorHandler } from "./middleware/error.js";
-import { renderHomePage, HOME_CSS, HOME_JS } from "./views/home-page.js";
+import { renderHomePage, HOME_SCRIPT_CSP_HASH } from "./views/home-page.js";
 
 // Log configuration problems once at startup so a broken deployment is
 // diagnosable from the function logs in seconds (e.g. `vercel logs`). Never
@@ -82,23 +82,31 @@ app.get("/health", (_, res) => {
 });
 
 // Human-friendly landing page (this project is API-only, so the root URL is
-// the natural place for discoverable docs). Styles/scripts are separate
-// same-origin assets because helmet's default CSP blocks inline ones.
+// the natural place for discoverable docs). The page is fully self-contained
+// (inline CSS + JS) and gets its own CSP: helmet's default policy already
+// permits inline styles, and the inline script is allow-listed by an exact
+// sha256 hash instead of 'unsafe-inline'. `no-store` keeps browsers from
+// heuristic-caching function responses (which once left a stale unstyled page).
 app.get("/", (_, res) => {
   res
     .status(200)
     .type("html")
+    .set(
+      "Content-Security-Policy",
+      `default-src 'self'; base-uri 'self'; font-src 'self' data:; ` +
+        `form-action 'self'; frame-ancestors 'self'; img-src 'self' data:; ` +
+        `object-src 'none'; script-src 'self' '${HOME_SCRIPT_CSP_HASH}'; ` +
+        `script-src-attr 'none'; style-src 'self' 'unsafe-inline'; ` +
+        `upgrade-insecure-requests`,
+    )
+    .set("Cache-Control", "no-store")
     .send(
       renderHomePage({
-        environment: process.env.NODE_ENV === "production" ? "production" : "development",
+        environment:
+          process.env.NODE_ENV ??
+          (process.env.VERCEL ? "production" : "development"),
       }),
     );
-});
-app.get("/assets/home.css", (_, res) => {
-  res.type("css").send(HOME_CSS);
-});
-app.get("/assets/home.js", (_, res) => {
-  res.type("js").send(HOME_JS);
 });
 
 // Error handling middleware

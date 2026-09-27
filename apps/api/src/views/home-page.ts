@@ -1,9 +1,14 @@
+import { createHash } from "node:crypto";
+
 /**
  * Human-friendly landing page for GET / — API overview, interactive health
  * check, and copy-pasteable examples.
  *
- * Served as HTML plus two same-origin assets (/assets/home.css, /assets/home.js)
- * because helmet's default CSP allows 'self' but blocks inline <style>/<script>.
+ * Fully self-contained: CSS and JS are inlined into the document (the script
+ * is allow-listed by an exact CSP sha256 hash, see app.ts). External
+ * /assets/* routes proved fragile in the wild (browsers heuristic-cache
+ * function responses, and content blockers may reject subresources), so the
+ * page has no subresource requests at all.
  */
 
 export interface HomePageOptions {
@@ -20,7 +25,7 @@ export function renderHomePage(opts: HomePageOptions): string {
 <title>JWT Auth Template API</title>
 <meta name="description" content="Production-ready JWT authentication API: register, login, rotating refresh tokens, and protected routes.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%236366f1'/%3E%3Cpath d='M16 7a4 4 0 0 1 4 4v2h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H11a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1v-2a4 4 0 0 1 4-4zm0 2.5A1.5 1.5 0 0 0 14.5 11v2h3v-2A1.5 1.5 0 0 0 16 9.5z' fill='white'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="/assets/home.css">
+<style>${HOME_CSS}</style>
 </head>
 <body>
 <nav class="nav">
@@ -166,7 +171,7 @@ curl -i -X POST "$BASE/auth/logout"`)}
   <p class="muted small">Self-host anywhere Node runs; on Vercel this API deploys as a single function.</p>
 </footer>
 
-<script src="/assets/home.js"></script>
+<script>${HOME_JS}</script>
 </body>
 </html>`;
 }
@@ -428,3 +433,11 @@ export const HOME_JS = `// landing page — served from /assets/home.js
   runHealth();
 })();
 `;
+
+/**
+ * CSP script-src hash for the exact inline script body above. The / route sets
+ * this on its own Content-Security-Policy header so the inline script runs
+ * without 'unsafe-inline'.
+ */
+export const HOME_SCRIPT_CSP_HASH =
+  "sha256-" + createHash("sha256").update(HOME_JS).digest("base64");

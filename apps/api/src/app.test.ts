@@ -73,31 +73,31 @@ test("GET / serves the HTML landing page", async () => {
   const res = await fetch(`${base}/`);
   expect(res.status).toBe(200);
   expect(res.headers.get("content-type")).toContain("text/html");
+  expect(res.headers.get("cache-control")).toContain("no-store");
   const html = await res.text();
   expect(html).toContain("JWT Auth Template");
   expect(html).toContain("/auth/register");
   expect(html).toContain("/auth/login");
   expect(html).toContain("/auth/refresh");
   expect(html).toContain("/auth/logout-all");
-  // helmet's default CSP blocks inline scripts/styles — the page must load
-  // both from same-origin asset routes instead.
-  expect(html).not.toContain("<script>"); // only <script src=...>
-  expect(html).toContain('<script src="/assets/home.js">');
-  expect(html).toContain('href="/assets/home.css"');
+  // The page is self-contained: inline style + inline script (allow-listed by
+  // a CSP sha256 hash set on the response), no subresource requests to block.
+  expect(html).toContain("<style>");
+  expect(html).toContain("<script>"); // inline, no src attribute
+  expect(html).not.toContain("<script src=");
+  expect(html).not.toContain('href="/assets/');
+});
+
+test("the landing page CSP allow-lists the inline script by hash", async () => {
+  const res = await fetch(`${base}/`);
+  const csp = res.headers.get("content-security-policy") ?? "";
+  // script-src must use the exact hash — no 'unsafe-inline' for scripts.
+  expect(csp).toContain("script-src 'self' 'sha256-");
+  expect(csp).toContain("style-src 'self' 'unsafe-inline'");
 });
 
 test("the landing page is also served under the /api prefix", async () => {
   const res = await fetch(`${base}/api`);
   expect(res.status).toBe(200);
   expect(res.headers.get("content-type")).toContain("text/html");
-});
-
-test("landing page assets are served with the right content types", async () => {
-  const css = await fetch(`${base}/assets/home.css`);
-  expect(css.status).toBe(200);
-  expect(css.headers.get("content-type")).toContain("text/css");
-
-  const js = await fetch(`${base}/assets/home.js`);
-  expect(js.status).toBe(200);
-  expect(js.headers.get("content-type")).toContain("javascript");
 });

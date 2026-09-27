@@ -66,8 +66,9 @@ or `NEXT_PUBLIC_API_URL` to bypass the proxy and call a directly exposed API
 | GET | `/` | — | interactive HTML docs for this API (also at `/api`) |
 
 `GET /` serves a human-friendly landing page — endpoint reference, copy-pasteable
-curl flows, and a live health check (styles/scripts come from `/assets/home.*`,
-which keeps helmet's default CSP happy).
+curl flows, and a live health check. The page is fully self-contained (inline
+CSS/JS; the script is allow-listed by a CSP sha256 hash, and the response is
+`Cache-Control: no-store`) so browsers have no subresources to block or cache.
 
 ## Deploying the API to Vercel
 
