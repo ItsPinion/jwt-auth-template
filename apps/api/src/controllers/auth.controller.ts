@@ -31,7 +31,7 @@ export const register = asyncHandler(
     // Schema already normalizes; normalize again so this handler is safe
     // regardless of the middleware chain it runs behind.
     const email = normalizeEmail(req.body.email);
-    const { password, role } = req.body;
+    const { password } = req.body;
 
     const [existingUser] = await db
       .select()
@@ -52,7 +52,9 @@ export const register = asyncHandler(
         .values({
           email,
           password: hashedPassword,
-          role,
+          // Never taken from the request: registration always creates a
+          // student. Privileged roles are granted by an admin later.
+          role: "student",
         })
         .returning();
     } catch (err) {

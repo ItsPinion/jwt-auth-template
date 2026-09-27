@@ -18,7 +18,11 @@ const passwordSchema = z
 export const registerSchema = z.object({
   email: emailSchema,
   password: passwordSchema,
-  role: roleSchema.exclude(["admin"]).optional().default("student"),
+  // Roles are NOT self-declared: registration always creates a student.
+  // Teacher (and admin) are privileged roles — the UI describes teachers as
+  // being able to "create quizzes and view results" — so they must be granted
+  // after verification (e.g. by an admin using the authorize middleware),
+  // never picked from a public signup form.
 });
 
 export const loginSchema = z.object({
